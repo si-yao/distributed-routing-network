@@ -8,7 +8,7 @@ import java.net.SocketException;
  */
 public class Client {
     public static void main(String[] args) throws IOException {
-        String fin = "client0.txt";
+        String fin = args[0];
         CmdClient cmdClient = new CmdClient(fin);
         cmdClient.start();
     }

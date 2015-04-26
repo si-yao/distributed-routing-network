@@ -34,9 +34,20 @@ public class ReceiveService implements Runnable{
             } catch (IOException e) {
                 e.printStackTrace();
             }
+            Thread t = new Thread(new OnPacketThread(packet));
+            t.start();
+        }
+    }
+
+    class OnPacketThread implements Runnable{
+        DatagramPacket packet;
+        public OnPacketThread(DatagramPacket packet){
+            this.packet = packet;
+        }
+        @Override
+        public void run(){
             onPacket(packet);
         }
-
     }
 
     public void onPacket(DatagramPacket packet){
@@ -54,20 +65,21 @@ public class ReceiveService implements Runnable{
             SerializeService serializeService = new SerializeService();
             serializeService.deserialize(buf);
             bfService.updateDV(serializeService.getDistanceVectors(), ip, port, serializeService.getDesIP(), serializeService.getCost());
-        } else {
-            System.out.println("Unsupported message type.");
         }
-
-        /*
         else if(msgType == 2) {
             receiveLinkDown(ip, port);
         }
         else if(msgType == 3) {
             receiveLinkUp(ip, port);
         }
-        else if(msgType == 4) {
-            float cost = buffer.getFloat(6);
-            receiveNewCost(ip, port, cost);
-        }*/
+    }
+
+    public void receiveLinkDown(String ip, int port){
+        System.out.println("Received linkdown "+ ip +":"+port);
+        bfService.linkDown(ip, port);
+    }
+
+    public void receiveLinkUp(String ip, int port){
+        bfService.linkUp(ip, port);
     }
 }

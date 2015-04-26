@@ -85,4 +85,37 @@ public class SendService {
     }
 
 
+    public void sendLinkDown(String ip, int port) {
+        try {
+            //System.out.println("sending link down");
+            ByteBuffer buffer = ByteBuffer.allocate(6);
+            buffer.putShort(0,(short)2);
+            buffer.putInt(2, bfService.getPort());
+            DatagramPacket packet = new DatagramPacket(buffer.array(),6);
+            packet.setAddress(InetAddress.getByName(ip));
+            packet.setPort(port);
+            socket.send(packet);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+
+    public void sendLinkUp(String ip, int port) {
+        try {
+            //System.out.println("sending link up");
+            ByteBuffer buffer = ByteBuffer.allocate(6);
+            buffer.putShort(0,(short)3);
+            buffer.putInt(2, bfService.getPort());
+            DatagramPacket packet = new DatagramPacket(buffer.array(),6);
+            packet.setAddress(InetAddress.getByName(ip));
+            packet.setPort(port);
+            socket.send(packet);
+        }
+        catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+
 }

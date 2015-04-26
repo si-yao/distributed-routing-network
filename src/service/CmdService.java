@@ -7,9 +7,10 @@ import java.util.Scanner;
  */
 public class CmdService implements Runnable {
     BFService bfService;
-
-    public CmdService(BFService bfService){
+    SendService sendService;
+    public CmdService(BFService bfService, SendService sendService){
         this.bfService = bfService;
+        this.sendService = sendService;
     }
 
     @Override
@@ -19,29 +20,54 @@ public class CmdService implements Runnable {
             String line = scanner.nextLine();
             String[] cmds = line.split(" ");
             String cmd = cmds[0];
-            if(cmd.equals("LINKDOWN")){
+            if(cmd.toUpperCase().equals("LINKDOWN")){//BUG HERE
                 linkDown(cmds);
-            } else if(cmd.equals("LINKUP")){
+            } else if(cmd.toUpperCase().equals("LINKUP")){//BUG HERE
                 linkUp(cmds);
-            } else if(cmd.equals("SHOWRT")){
+            } else if(cmd.toUpperCase().equals("SHOWRT")){
                 showRT();
-            } else {
+            } else if(cmd.toUpperCase().equals("CHANGECOST")){
+                changeCost(cmds);
+            } else if(cmd.toUpperCase().equals("SHOWNB")){
+                showNB();
+            }
+            else {
                 System.out.println("Unsupported cmd");
             }
         }
     }
 
-    //TODO
     private void linkDown(String[] cmds){
-        return;
+        String toIP = cmds[1];
+        int toPort = Integer.valueOf(cmds[2]);
+        sendService.sendLinkDown(toIP, toPort);
+        bfService.linkDown(toIP, toPort);
+        System.out.println("Link is down...");
     }
 
-    //TODO
     private void linkUp(String[] cmds){
-        return;
+        String toIP = cmds[1];
+        int toPort = Integer.valueOf(cmds[2]);
+        sendService.sendLinkUp(toIP, toPort);
+        bfService.linkUp(toIP, toPort);
+        System.out.println("Link is up...");
     }
 
-    private void showRT(){
+    private synchronized void showRT(){
         bfService.showRT();
+    }
+
+    private synchronized void showNB(){
+        bfService.showNeighbor();
+    }
+
+    private void changeCost(String[] cmds){
+        String toIP = cmds[1];
+        int toPort = Integer.valueOf(cmds[2]);
+        float cost = Float.valueOf(cmds[3]);
+        boolean handle = bfService.changeCost(toIP,toPort,cost);
+        if(!handle){
+            System.out.println("This link is not available.");
+        }
     }
 }

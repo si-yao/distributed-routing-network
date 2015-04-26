@@ -45,45 +45,48 @@ public class BFService {
         myDV = new ConcurrentHashMap<String, DistanceInfo>();
         neighborsDV = new ConcurrentHashMap<String, ConcurrentHashMap<String, DistanceInfo>>();
         scheduler = Executors.newScheduledThreadPool(3);
-        scheduler.scheduleAtFixedRate(heartBeats, timeout*1000/3, timeout*1000/3, MILLISECONDS);
+        scheduler.scheduleAtFixedRate(heartBeats, Math.min(timeout*1000/3, 1000), Math.min(timeout*1000/3, 1000), MILLISECONDS);
         scheduler.scheduleAtFixedRate(checkAlive, timeout*1000, timeout*1000, MILLISECONDS);
     }
 
     private void checkActive() {
         Date currentTime = Calendar.getInstance().getTime();
+        boolean isChanged = false;
         for(Map.Entry<String,NeighborInfo> item: neighbors.entrySet()) {
             if(!item.getValue().isConnected) continue;
             Date lastUpdate = item.getValue().time;
-            if((currentTime.getTime() - lastUpdate.getTime())> timeout) {
+            if((currentTime.getTime() - lastUpdate.getTime())> timeout*1000) {
+                System.out.println("Kill neighbor: "+item.getKey());
                 item.getValue().isConnected = false;
                 neighborsDV.remove(item.getKey());
-                updateMyDV();
+                isChanged = updateMyDV();
             }
         }
+        if(isChanged) sendService.sendMyDV();
     }
 
     /**
      * Recalculate my DV, invoke this function whenever anything changes.
      * @return
      */
-    private boolean updateMyDV(){
+    private synchronized boolean updateMyDV(){
         boolean isChanged = false;
-        myDV = new ConcurrentHashMap<String, DistanceInfo>();
+        ConcurrentHashMap<String, DistanceInfo> myDV0 = new ConcurrentHashMap<String, DistanceInfo>();
         for(String nei: neighbors.keySet()){
             if(!neighbors.get(nei).isConnected) continue;
-            myDV.put(nei, new DistanceInfo(neighbors.get(nei).cost, nei));
+            myDV0.put(nei, new DistanceInfo(neighbors.get(nei).cost, nei));
             if(!neighborsDV.containsKey(nei)) continue;
             ConcurrentHashMap<String, DistanceInfo> neiDV = neighborsDV.get(nei);
             for(String nei2Des: neiDV.keySet()){
-                if(neiDV.get(nei2Des).firstHop.equals(myAddress)) continue;
-                if(!myDV.containsKey(nei2Des)){
+                if(neiDV.get(nei2Des).firstHop.equals(myAddress)||nei2Des.equals(myAddress)) continue;
+                if(!myDV0.containsKey(nei2Des)){
                     isChanged = true;
-                    myDV.put(nei2Des, new DistanceInfo(neighbors.get(nei).cost+neiDV.get(nei2Des).cost, nei));
+                    myDV0.put(nei2Des, new DistanceInfo(neighbors.get(nei).cost+neiDV.get(nei2Des).cost, nei));
                 }
             }
         }
-        for(String desFromMyDV : myDV.keySet()){
-            DistanceInfo disInfoFromMyDV = myDV.get(desFromMyDV);
+        for(String desFromMyDV : myDV0.keySet()){
+            DistanceInfo disInfoFromMyDV = myDV0.get(desFromMyDV);
             float curCost = disInfoFromMyDV.cost;
             for(String nei: neighbors.keySet()){
                 if(!neighbors.get(nei).isConnected) continue;
@@ -102,6 +105,7 @@ public class BFService {
                 }
             }
         }
+        myDV = myDV0;
         return isChanged;
     }
 
@@ -156,7 +160,18 @@ public class BFService {
      * @param cost the cost between me and this neighbour.
      */
     public void updateDV(ConcurrentHashMap<String, DistanceInfo> neighborDV, String fromIP, int fromPort, String toIP, float cost) {
+        //SHOULD CHECK IF NEI IS NOT AVAILABLE, then do not do update.
+        //But should do for the 1st time.
+        if(myIP==null || myIP.equals("")) {
+            myIP = toIP;
+            myAddress = getAddress(myIP, myPort);
+        }
+        String neiAddr = getAddress(fromIP, fromPort);
+        NeighborInfo nei = updateNeighbor(fromIP, fromPort, cost);
+        nei.updateTime();
+        nei.isConnected = true;
         if(isSameDV(neighborDV, fromIP,fromPort,cost)) return;
+        neighborsDV.put(neiAddr, neighborDV);
         updateDVModal(neighborDV, fromIP, fromPort, toIP, cost);
     }
 
@@ -169,29 +184,26 @@ public class BFService {
      * @param cost
      */
     public void updateDVModal(ConcurrentHashMap<String, DistanceInfo> neighborDV, String fromIP, int fromPort, String toIP, float cost){
-        boolean isChanged = false;
-        if(myIP==null || myIP.equals("")) {
-            myIP = toIP;
-            myAddress = getAddress(myIP, myPort);
-        }
-
-        String neiAddr = getAddress(fromIP, fromPort);
-        NeighborInfo nei = updateNeighbor(fromIP, fromPort, cost);
-        nei.updateTime();
-        nei.isConnected = true;
-        neighborsDV.put(neiAddr, neighborDV);
-
-        isChanged = updateMyDV();
+        boolean isChanged = updateMyDV();
         if(isChanged) {
             sendService.sendMyDV();
         }
     }
 
-    public void changeCost(String toIP, int toPort, float cost){
+    public void addCost(String toIP, int toPort, float cost){
         String addr = getAddress(toIP, toPort);
         neighbors.put(addr, new NeighborInfo(cost));
         updateMyDV();
         sendService.sendMyDV();
+    }
+
+    public boolean changeCost(String toIP, int toPort, float cost){
+        String addr = getAddress(toIP, toPort);
+        if(neighbors.containsKey(addr) && neighbors.get(addr).isConnected){
+            addCost(toIP, toPort, cost);
+            return true;
+        }
+        return false;
     }
 
     private boolean isSameDV(ConcurrentHashMap<String, DistanceInfo> neighborDV, String fromIP, int fromPort, float cost){
@@ -248,4 +260,20 @@ public class BFService {
             }
         }
     }
+
+    public void linkUp(String ip, int port){
+        String addr = getAddress(ip, port);
+        if(!neighbors.containsKey(addr)) return;
+        neighbors.get(addr).isConnected = true;
+        updateMyDV();
+    }
+
+    public void linkDown(String ip, int port){
+        String addr = getAddress(ip, port);
+        if(!neighbors.containsKey(addr)) return;
+        neighbors.get(addr).isConnected = false;
+        neighborsDV.remove(addr);
+        updateMyDV();
+    }
+
 }
