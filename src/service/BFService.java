@@ -2,10 +2,12 @@ package service;
 
 import model.*;
 
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.Map;
-
+import java.io.IOException;
+import java.net.SocketException;
+import java.text.SimpleDateFormat;
+import java.util.*;
+import java.util.concurrent.*;
+import static java.util.concurrent.TimeUnit.*;
 /**
  * Created by szeyiu on 4/25/15.
  */
@@ -13,43 +15,109 @@ public class BFService {
     private String myIP;//actually I don't need to know my IP, because UDP contains it.
     private int myPort;//I must know my port, because UDP does not contain it, and I need to indicate when send msg to neighbours.
     private String myAddress;//unnecessary, only need to know port.
-    private HashMap<String, NeighborInfo> neighbors;
-    private HashMap<String, DistanceInfo> distanceVectors;
+    private int timeout;// seconds
+    private ConcurrentHashMap<String, NeighborInfo> neighbors;
+    private ConcurrentHashMap<String, DistanceInfo> myDV;
+    private ConcurrentHashMap<String, ConcurrentHashMap<String, DistanceInfo>> neighborsDV;
+    private SendService sendService;
+    private ScheduledExecutorService scheduler;
+
+    Runnable heartBeats = new Runnable() {
+        @Override
+        public void run() {
+            sendService.sendMyDV();
+        }
+    };
+
+    Runnable checkAlive = new Runnable() {
+        @Override
+        public void run() {
+            checkActive();
+        }
+    };
 
 
-    public static String getAddress(String ip, int port) {
-        return ip + ":" + port;
+    public BFService(int port, int timeout) throws SocketException {
+        this.myPort = port;
+        this.timeout = timeout;
+        sendService = new SendService(this);
+        neighbors = new ConcurrentHashMap<String, NeighborInfo>();
+        myDV = new ConcurrentHashMap<String, DistanceInfo>();
+        neighborsDV = new ConcurrentHashMap<String, ConcurrentHashMap<String, DistanceInfo>>();
+        scheduler = Executors.newScheduledThreadPool(3);
+        scheduler.scheduleAtFixedRate(heartBeats, timeout*1000/3, timeout*1000/3, MILLISECONDS);
+        scheduler.scheduleAtFixedRate(checkAlive, timeout*1000, timeout*1000, MILLISECONDS);
     }
-    public synchronized NeighborInfo addNeighbor(String ip, int port, float cost) {
 
-        if(ip.equals("localhost")) {
-            ip = "127.0.0.1";
-        }
-
-        String address = getAddress(ip, port);
-        NeighborInfo item = new NeighborInfo(cost);
-        if(!neighbors.containsKey(address)) {
-            neighbors.put(address, item);
-        }
-
-        addPathInDV(address, cost);
-
-        return item;
-    }
-    public synchronized void addPathInDV(String address, float cost) {
-        if(!distanceVectors.containsKey(address)) {
-            DistanceInfo newDis = new DistanceInfo(cost, address);
-            distanceVectors.put(address, newDis);
-        }
-        else {
-            float currentCost = distanceVectors.get(address).cost;
-            if(cost < currentCost) {
-                distanceVectors.get(address).firstHop = address;
-                distanceVectors.get(address).cost = cost;
+    private void checkActive() {
+        Date currentTime = Calendar.getInstance().getTime();
+        for(Map.Entry<String,NeighborInfo> item: neighbors.entrySet()) {
+            if(!item.getValue().isConnected) continue;
+            Date lastUpdate = item.getValue().time;
+            if((currentTime.getTime() - lastUpdate.getTime())> timeout) {
+                item.getValue().isConnected = false;
+                neighborsDV.remove(item.getKey());
+                updateMyDV();
             }
         }
     }
-    private synchronized NeighborInfo findNeighbor(String ip, int port) {
+
+    /**
+     * Recalculate my DV, invoke this function whenever anything changes.
+     * @return
+     */
+    private boolean updateMyDV(){
+        boolean isChanged = false;
+        myDV = new ConcurrentHashMap<String, DistanceInfo>();
+        for(String nei: neighbors.keySet()){
+            if(!neighbors.get(nei).isConnected) continue;
+            myDV.put(nei, new DistanceInfo(neighbors.get(nei).cost, nei));
+            if(!neighborsDV.containsKey(nei)) continue;
+            ConcurrentHashMap<String, DistanceInfo> neiDV = neighborsDV.get(nei);
+            for(String nei2Des: neiDV.keySet()){
+                if(neiDV.get(nei2Des).firstHop.equals(myAddress)) continue;
+                if(!myDV.containsKey(nei2Des)){
+                    isChanged = true;
+                    myDV.put(nei2Des, new DistanceInfo(neighbors.get(nei).cost+neiDV.get(nei2Des).cost, nei));
+                }
+            }
+        }
+        for(String desFromMyDV : myDV.keySet()){
+            DistanceInfo disInfoFromMyDV = myDV.get(desFromMyDV);
+            float curCost = disInfoFromMyDV.cost;
+            for(String nei: neighbors.keySet()){
+                if(!neighbors.get(nei).isConnected) continue;
+                if(!neighborsDV.containsKey(nei)) continue;
+                NeighborInfo neiInfo = neighbors.get(nei);
+                float neiCost = neiInfo.cost;
+                ConcurrentHashMap<String, DistanceInfo> neiDV = neighborsDV.get(nei);
+                if(!neiDV.containsKey(desFromMyDV)) continue;
+                DistanceInfo disInfoFromNeiDV = neiDV.get(desFromMyDV);
+                if(disInfoFromNeiDV.firstHop.equals(myAddress)) continue;
+                float neiDesCost = disInfoFromNeiDV.cost;
+                if(curCost>neiDesCost+neiCost){
+                    disInfoFromMyDV.cost = neiDesCost+neiCost;
+                    disInfoFromMyDV.firstHop = nei;
+                    isChanged = true;
+                }
+            }
+        }
+        return isChanged;
+    }
+
+    private String getAddress(String ip, int port) {
+        return ip + ":" + port;
+    }
+
+    private NeighborInfo updateNeighbor(String ip, int port, float cost) {
+        ip = (ip.equals("localhost"))? "127.0.0.1": ip;
+        String address = getAddress(ip, port);
+        NeighborInfo item = new NeighborInfo(cost);
+        neighbors.put(address, item);
+        return item;
+    }
+
+    private  NeighborInfo findNeighbor(String ip, int port) {
         String address = getAddress(ip, port);
         if(neighbors.containsKey(address)) {
             return neighbors.get(address);
@@ -57,76 +125,127 @@ public class BFService {
         return null;
     }
 
+    public ConcurrentHashMap<String, NeighborInfo> getNeighbors() {
+        return neighbors;
+    }
+
+    public String extractIP(String address) {
+        int index = address.indexOf(":");
+        return address.substring(0, index);
+    }
+
+    public ConcurrentHashMap<String, DistanceInfo> getMyDV() {
+        return myDV;
+    }
+
+    public int extractPort(String address) {
+        int index = address.indexOf(":");
+        return Integer.parseInt(address.substring(index+1));
+    }
+
+    public int getPort() {
+        return myPort;
+    }
+
     /**
-     * update my DV according to the received DV of neighbour.
-     * @param vectors vector is the DV received from a neighbour.
+     * update my DV according to the received DV of neighbour. (if neighbor's DV has not changed, then do nothing)
+     * @param neighborDV vector is the DV received from a neighbour.
      * @param fromIP the neighbour's ip
      * @param fromPort the neighbour's port
      * @param toIP my ip, need it in case.
      * @param cost the cost between me and this neighbour.
      */
-    private synchronized void update(HashMap<String, DistanceInfo> vectors, String fromIP, int fromPort, String toIP, float cost) {
-        //System.out.println("getUpdate");
-        NeighborInfo nei = findNeighbor(fromIP, fromPort);
+    public void updateDV(ConcurrentHashMap<String, DistanceInfo> neighborDV, String fromIP, int fromPort, String toIP, float cost) {
+        if(isSameDV(neighborDV, fromIP,fromPort,cost)) return;
+        updateDVModal(neighborDV, fromIP, fromPort, toIP, cost);
+    }
 
-        if(myIP.isEmpty()) {
+    /**
+     * Update my DV modally, no matter whether neighborDV has been changed or not.
+     * @param neighborDV
+     * @param fromIP
+     * @param fromPort
+     * @param toIP
+     * @param cost
+     */
+    public void updateDVModal(ConcurrentHashMap<String, DistanceInfo> neighborDV, String fromIP, int fromPort, String toIP, float cost){
+        boolean isChanged = false;
+        if(myIP==null || myIP.equals("")) {
             myIP = toIP;
             myAddress = getAddress(myIP, myPort);
         }
 
-        if(nei == null) {
-            nei = addNeighbor(fromIP, fromPort, cost);
-        }
-
+        String neiAddr = getAddress(fromIP, fromPort);
+        NeighborInfo nei = updateNeighbor(fromIP, fromPort, cost);
         nei.updateTime();
-        nei.status = true;
-        for(Map.Entry<String, DistanceInfo> entry : vectors.entrySet()) {
-            if(entry.getKey().equals(myAddress) || entry.getValue().firstHop.equals(myAddress))
-                continue;
+        nei.isConnected = true;
+        neighborsDV.put(neiAddr, neighborDV);
 
-            if(distanceVectors.containsKey(entry.getKey())) {
-                if(distanceVectors.get(entry.getKey()).firstHop.equals(getAddress(fromIP, fromPort))) {
-                    distanceVectors.get(entry.getKey()).cost = nei.cost+entry.getValue().cost;
-                }
-                else if(nei.cost+entry.getValue().cost < distanceVectors.get(entry.getKey()).cost) {
-                    distanceVectors.get(entry.getKey()).cost = nei.cost+entry.getValue().cost;
-                    distanceVectors.get(entry.getKey()).firstHop = getAddress(fromIP, fromPort);
-                }
-            }
-            else {
-                DistanceInfo newDis = new DistanceInfo(nei.cost+entry.getValue().cost, getAddress(fromIP, fromPort));
-                distanceVectors.put(entry.getKey(), newDis);
-            }
-        }
-
-        Iterator<String> it = distanceVectors.keySet().iterator();
-
-        while(it.hasNext()) {
-            String addr = it.next();
-            DistanceInfo item = distanceVectors.get(addr);
-            if(item.firstHop.equals(getAddress(fromIP, fromPort)) && !addr.equals(getAddress(fromIP, fromPort))) {
-                if(!vectors.containsKey(addr)) {
-                    it.remove();
-                }
-            }
-        }
-
-        for(Map.Entry<String, NeighborInfo> entry : neighbors.entrySet()) {
-            if(!entry.getValue().status)
-                continue;
-
-            if(!distanceVectors.containsKey(entry.getKey())) {
-                float currentCost = entry.getValue().cost;
-                addPathInDV(entry.getKey(), currentCost);
-            }
-            else {
-                float currentCost = distanceVectors.get(entry.getKey()).cost;
-                if(entry.getValue().cost < currentCost) {
-                    distanceVectors.get(entry.getKey()).cost = entry.getValue().cost;
-                    distanceVectors.get(entry.getKey()).firstHop = entry.getKey();
-                }
-            }
+        isChanged = updateMyDV();
+        if(isChanged) {
+            sendService.sendMyDV();
         }
     }
 
+    public void changeCost(String toIP, int toPort, float cost){
+        String addr = getAddress(toIP, toPort);
+        neighbors.put(addr, new NeighborInfo(cost));
+        updateMyDV();
+        sendService.sendMyDV();
+    }
+
+    private boolean isSameDV(ConcurrentHashMap<String, DistanceInfo> neighborDV, String fromIP, int fromPort, float cost){
+        String neiAddr = getAddress(fromIP, fromPort);
+        if(!neighbors.containsKey(neiAddr)) return false;
+        if(!neighborsDV.containsKey(neiAddr)) return false;
+        NeighborInfo oldinfo = neighbors.get(neiAddr);
+        if(!oldinfo.isConnected) return false;
+        if(oldinfo.cost!=cost) return false;
+        ConcurrentHashMap<String, DistanceInfo> oldDV = neighborsDV.get(neiAddr);
+        if(neighborDV.size()!=oldDV.size()) return false;
+        for(String des : neighborDV.keySet()){
+            if(!oldDV.containsKey(des)) return false;
+            DistanceInfo oldDist = oldDV.get(des);
+            DistanceInfo newDist = neighborDV.get(des);
+            if(oldDist.cost!=newDist.cost) return false;
+            if(!oldDist.firstHop.equals(newDist.firstHop)) return false;
+        }
+        return true;
+    }
+
+
+    public void heartFromNeighbour(String fromIP, int fromPort){
+        NeighborInfo n = findNeighbor(fromIP, fromPort);
+        if(n==null) return;
+        n.updateTime();
+    }
+
+
+    public void showRT() {
+        SimpleDateFormat format = new SimpleDateFormat("hh:mm:ss");
+        String time = format.format(Calendar.getInstance().getTime());
+        System.out.println("Time: " + time + "   Distance vector list is:");
+        for(Map.Entry<String,DistanceInfo> item: myDV.entrySet()) {
+            String output = "";
+            output += "Destination = " + item.getKey() + ", ";
+            output += "Cost = " + item.getValue().cost + ", ";
+            output += "Link = (" + item.getValue().firstHop + ")";
+            System.out.println(output);
+        }
+    }
+
+    public synchronized void showNeighbor() {
+        SimpleDateFormat format = new SimpleDateFormat("hh:mm:ss");
+        String time = format.format(Calendar.getInstance().getTime());
+        System.out.println("Time: " + time + "   Neighbor list is:");
+        for(Map.Entry<String,NeighborInfo> item: neighbors.entrySet()) {
+            if(item.getValue().isConnected) {
+                String output = "";
+                output += "Address = " + item.getKey() + ", ";
+                output += "Cost = " + item.getValue().cost + ", ";
+                output += "last Update = " + format.format(item.getValue().time);
+                System.out.println(output);
+            }
+        }
+    }
 }

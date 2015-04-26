@@ -8,12 +8,12 @@ import java.util.Date;
  */
 public class NeighborInfo {
     public float cost;
-    public boolean status;
+    public boolean isConnected;
     public Date time;
 
     public NeighborInfo(float cost) {
         this.cost = cost;
-        status = true;
+        isConnected = true;
         updateTime();
     }
 
