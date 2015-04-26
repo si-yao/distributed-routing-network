@@ -19,6 +19,7 @@ public class BFService {
     private ConcurrentHashMap<String, NeighborInfo> neighbors;
     private ConcurrentHashMap<String, DistanceInfo> myDV;
     private ConcurrentHashMap<String, ConcurrentHashMap<String, DistanceInfo>> neighborsDV;
+    private HashSet<String> knownHost;
     private SendService sendService;
     private ScheduledExecutorService scheduler;
 
@@ -47,6 +48,7 @@ public class BFService {
         scheduler = Executors.newScheduledThreadPool(3);
         scheduler.scheduleAtFixedRate(heartBeats, Math.min(timeout*1000/3, 1000), Math.min(timeout*1000/3, 1000), MILLISECONDS);
         scheduler.scheduleAtFixedRate(checkAlive, timeout*1000, timeout*1000, MILLISECONDS);
+        knownHost = new HashSet<String>(50);
     }
 
     private void checkActive() {
@@ -167,6 +169,9 @@ public class BFService {
             myAddress = getAddress(myIP, myPort);
         }
         String neiAddr = getAddress(fromIP, fromPort);
+        if(!neighbors.containsKey(neiAddr)) return;
+        if(!neighbors.get(neiAddr).isConnected && knownHost.contains(neiAddr)) return;
+        knownHost.add(neiAddr);
         NeighborInfo nei = updateNeighbor(fromIP, fromPort, cost);
         nei.updateTime();
         nei.isConnected = true;
