@@ -13,29 +13,39 @@ import java.util.concurrent.*;
 public class SerializeService {
     private ConcurrentHashMap<String, DistanceInfo> distanceVectors;
     private short msgType;
+    private String srcIP;
     private int srcPort;
     private float desCost;
     private String desIP;
     private int desPort;
-
+    private int offset;
+    public static int headerSize;
     public SerializeService(){
         distanceVectors = new ConcurrentHashMap<String, DistanceInfo>();
+        headerSize = 44;
     }
-    public byte[] serialize() {
-        int size = distanceVectors.size();
-        ByteBuffer buffer = ByteBuffer.allocate(46*size+29);
-
-        buffer.putShort(msgType);   //2
-        buffer.putInt(srcPort);   //4
-        buffer.putFloat(desCost);   //4
+    private void serializeHeader(ByteBuffer buffer){
+        buffer.putShort(msgType);   //2B
+        if(srcIP==null) srcIP="";
+        String srcIP_temp = srcIP;
+        for(int i=0; i<15-srcIP.length(); i++) {
+            srcIP_temp = srcIP_temp + " ";
+        }
+        buffer.put(srcIP_temp.getBytes()); //15B
+        buffer.putInt(srcPort);   //4B
+        buffer.putFloat(desCost);   //4B
 
         String desIP_temp = desIP;
         for(int i=0; i<15-desIP.length(); i++) {
             desIP_temp = desIP_temp + " ";
         }
-        buffer.put(desIP_temp.getBytes());  //15
+        buffer.put(desIP_temp.getBytes());  //15B
         buffer.putInt(desPort);
-
+    }
+    public byte[] serialize() {
+        int size = distanceVectors.size();
+        ByteBuffer buffer = ByteBuffer.allocate(46 * size + headerSize);
+        serializeHeader(buffer);
         if(distanceVectors!=null) {
             for (Map.Entry<String, DistanceInfo> entry : distanceVectors.entrySet()) {
                 String destination = entry.getKey();
@@ -62,18 +72,32 @@ public class SerializeService {
         return buffer.array();
     }
 
+    public byte[] serializeBinFile(byte[] bin, int offset){
+        int offsetSize = 4;
+        int binSize = bin.length;
+        ByteBuffer buffer = ByteBuffer.allocate(offsetSize + binSize + headerSize);
+        serializeHeader(buffer);
+        buffer.putInt(offset);
+        buffer.put(bin);
+        return buffer.array();
+    }
+
     public void deserialize(byte[] buf){
         int size = buf.length;
         ByteBuffer buffer = ByteBuffer.wrap(buf);
         msgType = buffer.getShort(0);
-        srcPort = buffer.getInt(2);
-        desCost = buffer.getFloat(6);
+        byte[] srcIP_temp = new byte[15];
+        System.arraycopy(buf, 2, srcIP_temp, 0, 15);
+        String srcIP_str = new String(srcIP_temp);
+        srcIP = srcIP_str.trim();
+        srcPort = buffer.getInt(17);
+        desCost = buffer.getFloat(21);
         byte[] desIP_temp = new byte[15];
-        System.arraycopy(buf, 10, desIP_temp, 0, 15);
+        System.arraycopy(buf, 25, desIP_temp, 0, 15);
         String desIP_str = new String(desIP_temp);
         desIP = desIP_str.trim();
-        desPort = buffer.getInt(25);
-        int pos = 29;
+        desPort = buffer.getInt(40);
+        int pos = 44;
 
         while(pos < size) {
             byte[] des = new byte[21];
@@ -96,6 +120,34 @@ public class SerializeService {
         }
     }
 
+    /**
+     *
+     * @param buf
+     * @return the bin file
+     */
+    public byte[] deserializeBinFile(byte[] buf){
+        int size = buf.length;
+        ByteBuffer buffer = ByteBuffer.wrap(buf);
+        msgType = buffer.getShort(0);
+        byte[] srcIP_temp = new byte[15];
+        System.arraycopy(buf, 2, srcIP_temp, 0, 15);
+        String srcIP_str = new String(srcIP_temp);
+        srcIP = srcIP_str.trim();
+        srcPort = buffer.getInt(17);
+        desCost = buffer.getFloat(21);
+        byte[] desIP_temp = new byte[15];
+        System.arraycopy(buf, 25, desIP_temp, 0, 15);
+        String desIP_str = new String(desIP_temp);
+        desIP = desIP_str.trim();
+        desPort = buffer.getInt(40);
+        offset = buffer.getInt(44);
+        int pos = 48;
+        if(pos>=size) return null;
+        byte[] binBytes = new byte[size-pos];
+        System.arraycopy(buf, pos, binBytes, 0, binBytes.length);
+        return binBytes;
+    }
+
     public ConcurrentHashMap<String, DistanceInfo> getDistanceVectors() {
         return distanceVectors;
     }
@@ -103,7 +155,6 @@ public class SerializeService {
     public void setDistanceVectors(ConcurrentHashMap<String, DistanceInfo> vec) {
         distanceVectors = vec;
     }
-
 
     public int getDesPort() {
         return desPort;
@@ -151,6 +202,21 @@ public class SerializeService {
 
     public void setDesIP(String ip) {
         this.desIP = ip;
+    }
+
+    public String getSrcIP() {
+        return srcIP;
+    }
+
+    public void setSrcIP(String srcIP) {
+        this.srcIP = srcIP;
+    }
+
+    public int getOffset() {
+        return offset;
+    }
+    public void setOffset(int offset) {
+        this.offset = offset;
     }
 
 }

@@ -1,16 +1,24 @@
-package service;
+package threads;
 
+import service.BFService;
+import service.FileService;
+import service.SendService;
+
+import java.io.File;
+import java.io.IOException;
 import java.util.Scanner;
 
 /**
  * Created by szeyiu on 4/25/15.
  */
-public class CmdService implements Runnable {
+public class CmdThread implements Runnable {
     BFService bfService;
     SendService sendService;
-    public CmdService(BFService bfService, SendService sendService){
+    FileService fileService;
+    public CmdThread(BFService bfService, SendService sendService, FileService fileService){
         this.bfService = bfService;
         this.sendService = sendService;
+        this.fileService = fileService;
     }
 
     @Override
@@ -30,6 +38,14 @@ public class CmdService implements Runnable {
                 changeCost(cmds);
             } else if(cmd.toUpperCase().equals("SHOWNB")){
                 showNB();
+            } else if(cmd.toUpperCase().equals("TRANSFER")){
+                try {
+                    transfer(cmds);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
             }
             else {
                 System.out.println("Unsupported cmd");
@@ -58,7 +74,7 @@ public class CmdService implements Runnable {
     }
 
     private synchronized void showNB(){
-        bfService.showNeighbor();
+        bfService.showNB();
     }
 
     private void changeCost(String[] cmds){
@@ -69,5 +85,12 @@ public class CmdService implements Runnable {
         if(!handle){
             System.out.println("This link is not available.");
         }
+    }
+
+    private void transfer(String[] cmds) throws IOException, InterruptedException {
+        String f = cmds[1];
+        String desIP = cmds[2];
+        int desPort = Integer.valueOf(cmds[3]);
+        fileService.sendFile(desIP, desPort, f);
     }
 }

@@ -2,9 +2,13 @@ package service;
 
 import model.NeighborInfo;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.*;
 import java.nio.ByteBuffer;
+import java.nio.channels.OverlappingFileLockException;
 import java.util.Map;
 
 /**
@@ -13,7 +17,7 @@ import java.util.Map;
 public class SendService {
     private BFService bfService;
     private DatagramSocket socket;
-
+    private int MSS = 44+4000;
     public SendService(BFService bfService) throws SocketException {
         this.bfService = bfService;
         socket = new DatagramSocket();
@@ -88,10 +92,11 @@ public class SendService {
     public void sendLinkDown(String ip, int port) {
         try {
             //System.out.println("sending link down");
-            ByteBuffer buffer = ByteBuffer.allocate(6);
+            int byteSize = 6+15;
+            ByteBuffer buffer = ByteBuffer.allocate(byteSize);
             buffer.putShort(0,(short)2);
-            buffer.putInt(2, bfService.getPort());
-            DatagramPacket packet = new DatagramPacket(buffer.array(),6);
+            buffer.putInt(2+15, bfService.getPort());
+            DatagramPacket packet = new DatagramPacket(buffer.array(),byteSize);
             packet.setAddress(InetAddress.getByName(ip));
             packet.setPort(port);
             socket.send(packet);
@@ -104,10 +109,11 @@ public class SendService {
     public void sendLinkUp(String ip, int port) {
         try {
             //System.out.println("sending link up");
-            ByteBuffer buffer = ByteBuffer.allocate(6);
+            int byteSize = 6+15;
+            ByteBuffer buffer = ByteBuffer.allocate(byteSize);
             buffer.putShort(0,(short)3);
-            buffer.putInt(2, bfService.getPort());
-            DatagramPacket packet = new DatagramPacket(buffer.array(),6);
+            buffer.putInt(2+15, bfService.getPort());
+            DatagramPacket packet = new DatagramPacket(buffer.array(),byteSize);
             packet.setAddress(InetAddress.getByName(ip));
             packet.setPort(port);
             socket.send(packet);
@@ -115,6 +121,57 @@ public class SendService {
         catch (Exception e) {
             e.printStackTrace();
         }
+    }
+
+    public void sendFile(String desIP, int desPort, String nextHopIP, int nextHopPort, String file) throws IOException, InterruptedException {
+        int fileSegSize = MSS - SerializeService.headerSize;
+        SerializeService serializeService = new SerializeService();
+        serializeService.setMsgType((short) 4);//4 is for file transfer
+        String myIp = (bfService.myIP==null)? "":bfService.myIP;
+        serializeService.setSrcIP(myIp);
+        serializeService.setSrcPort(bfService.getPort());
+        serializeService.setCost(0);
+        serializeService.setDesIP(desIP);
+        serializeService.setDesPort(desPort);
+        File fin = new File(file);
+        FileInputStream is = new FileInputStream(fin);
+        byte[] binArr = new byte[fileSegSize];
+        int offset = 0;
+        int curBinLen = is.read(binArr, 0, fileSegSize);
+        while(curBinLen>0){
+            if(curBinLen!=fileSegSize){
+                byte[] binArr0 = new byte[curBinLen];
+                System.arraycopy(binArr, 0, binArr0, 0, curBinLen);
+                binArr = binArr0;
+                offset = -offset-1;//negative means the end of the packet
+            }
+            System.out.println("offset: " + offset);
+            byte[] sendBytes = serializeService.serializeBinFile(binArr, offset);
+            DatagramPacket packet = new DatagramPacket(sendBytes, sendBytes.length);
+            packet.setAddress(InetAddress.getByName(nextHopIP));
+            packet.setPort(nextHopPort);
+            socket.send(packet);
+            if(offset<0) break;
+            offset += curBinLen;
+            curBinLen = is.read(binArr, 0, fileSegSize);
+            Thread.sleep(10);
+        }
+        is.close();
+    }
+
+    public void forwardBin(String srcIP, int srcPort, String desIP, int desPort, String nextHopIP, int nextHopPort, byte[] bin, int offset) throws IOException {
+        SerializeService serializeService = new SerializeService();
+        serializeService.setMsgType((short) 4);//4 is for file transfer
+        serializeService.setSrcIP(srcIP);
+        serializeService.setSrcPort(srcPort);
+        serializeService.setCost(0);
+        serializeService.setDesIP(desIP);
+        serializeService.setDesPort(desPort);
+        byte[] sendBytes = serializeService.serializeBinFile(bin, offset);
+        DatagramPacket packet = new DatagramPacket(sendBytes, sendBytes.length);
+        packet.setAddress(InetAddress.getByName(nextHopIP));
+        packet.setPort(nextHopPort);
+        socket.send(packet);
     }
 
 

@@ -12,9 +12,9 @@ import static java.util.concurrent.TimeUnit.*;
  * Created by szeyiu on 4/25/15.
  */
 public class BFService {
-    private String myIP;//actually I don't need to know my IP, because UDP contains it.
-    private int myPort;//I must know my port, because UDP does not contain it, and I need to indicate when send msg to neighbours.
-    private String myAddress;//unnecessary, only need to know port.
+    public String myIP;//actually I don't need to know my IP, because UDP contains it.
+    public int myPort;//I must know my port, because UDP does not contain it, and I need to indicate when send msg to neighbours.
+    public String myAddress;//unnecessary, only need to know port.
     private int timeout;// seconds
     private ConcurrentHashMap<String, NeighborInfo> neighbors;
     private ConcurrentHashMap<String, DistanceInfo> myDV;
@@ -46,9 +46,15 @@ public class BFService {
         myDV = new ConcurrentHashMap<String, DistanceInfo>();
         neighborsDV = new ConcurrentHashMap<String, ConcurrentHashMap<String, DistanceInfo>>();
         scheduler = Executors.newScheduledThreadPool(3);
-        scheduler.scheduleAtFixedRate(heartBeats, Math.min(timeout*1000/3, 1000), Math.min(timeout*1000/3, 1000), MILLISECONDS);
+        scheduler.scheduleAtFixedRate(heartBeats, Math.min(timeout*1000, 1000), Math.min(timeout*1000, 1000), MILLISECONDS);
         scheduler.scheduleAtFixedRate(checkAlive, timeout*1000, timeout*1000, MILLISECONDS);
         knownHost = new HashSet<String>(50);
+    }
+
+    public String nextHop(String desIP, int desPort){
+        String addr = getAddress(desIP, desPort);
+        if(!myDV.containsKey(addr)) return null;
+        return myDV.get(addr).firstHop;
     }
 
     private void checkActive() {
@@ -57,7 +63,7 @@ public class BFService {
         for(Map.Entry<String,NeighborInfo> item: neighbors.entrySet()) {
             if(!item.getValue().isConnected) continue;
             Date lastUpdate = item.getValue().time;
-            if((currentTime.getTime() - lastUpdate.getTime())> timeout*1000) {
+            if((currentTime.getTime() - lastUpdate.getTime())> 3*timeout*1000) {
                 System.out.println("Kill neighbor: "+item.getKey());
                 item.getValue().isConnected = false;
                 neighborsDV.remove(item.getKey());
@@ -199,6 +205,8 @@ public class BFService {
         String addr = getAddress(toIP, toPort);
         neighbors.put(addr, new NeighborInfo(cost));
         updateMyDV();
+        //linkUp(toIP, toPort);
+        sendService.sendLinkUp(toIP, toPort);
         sendService.sendMyDV();
     }
 
@@ -251,7 +259,7 @@ public class BFService {
         }
     }
 
-    public synchronized void showNeighbor() {
+    public synchronized void showNB() {
         SimpleDateFormat format = new SimpleDateFormat("hh:mm:ss");
         String time = format.format(Calendar.getInstance().getTime());
         System.out.println("Time: " + time + "   Neighbor list is:");

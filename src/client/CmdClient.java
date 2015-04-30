@@ -1,8 +1,9 @@
 package client;
 
 import service.BFService;
-import service.CmdService;
-import service.ReceiveService;
+import service.FileService;
+import threads.CmdThread;
+import threads.ReceiveThread;
 import service.SendService;
 
 import java.io.*;
@@ -16,6 +17,7 @@ public class CmdClient{
     private int timeout;
     private BFService bfService;
     private SendService sendService;
+    private FileService fileService;
     private String configFile;
 
     public CmdClient(String configFile) throws SocketException {
@@ -30,11 +32,12 @@ public class CmdClient{
         timeout = Integer.valueOf(splt[1]);
         bfService = new BFService(port, timeout);
         sendService = new SendService(bfService);
-        ReceiveService receiveService = new ReceiveService(bfService);
-        Thread t = new Thread(receiveService);
+        fileService = new FileService(bfService);
+        ReceiveThread receiveThread = new ReceiveThread(bfService);
+        Thread t = new Thread(receiveThread);
         t.start();
-        CmdService cmdService = new CmdService(bfService, sendService);
-        t = new Thread(cmdService);
+        CmdThread cmdThread = new CmdThread(bfService, sendService, fileService);
+        t = new Thread(cmdThread);
         t.start();
 
         line = bufferedReader.readLine();
