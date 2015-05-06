@@ -24,8 +24,8 @@ The distance vector mentioned above is stored as follow: (total 46*n B)
 |     String: 21B       | float: 4B |     String: 21B    |     String: 21B       | float: 4B |     String: 21B    | ...
 
 The BinFile format
-|offset|Bin|
-|  4B  |...|
+|file name|offset|checksum|Bin|
+|   26 B  |  4B  |short:2B|...|
 
 Here are more details of how each field is used:
 

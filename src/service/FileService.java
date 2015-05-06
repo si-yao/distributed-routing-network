@@ -1,5 +1,7 @@
 package service;
 
+import threads.ReceiveThread;
+
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
@@ -18,10 +20,19 @@ public class FileService {
         this.sendService = new SendService(bfService);
         curBuffer = null;
     }
-    public void forwardBinFile(String srcIP, int srcPort, String desIP, int desPort, byte[] bin, int offset, String filename) throws IOException {
-        System.out.println("packet received (offset: " + offset + ")");
-        System.out.println("Source = " + srcIP + ":" + srcPort);
+    public void forwardBinFile(String srcIP, int srcPort, String desIP, int desPort, byte[] bin, int offset, String filename, short sum) throws IOException {
+        boolean isAck = filename.equals("thisisaack");
+        if(!isAck) System.out.println("packet received (offset: " + offset + ")");
+        if(!isAck) System.out.println("Source = " + srcIP + ":" + srcPort);
         if(bfService.myIP.equals(desIP) && bfService.myPort==desPort){
+            byte[] tmp = new byte[1];
+            String nextAddr = bfService.nextHop(srcIP, srcPort);
+            //System.out.print("pckt sum: "+ReceiveThread.checksum(bin)+"\nsupposed sum: "+sum+"\n");
+            if(nextAddr!=null && ReceiveThread.checksum(bin)==sum){
+                String nextIP = bfService.extractIP(nextAddr);
+                int nextPort = bfService.extractPort(nextAddr);
+                sendService.forwardBin(desIP,desPort,srcIP,srcPort,nextIP,nextPort,tmp,offset,"thisisaack");
+            }
             boolean isEnd = false;
             if(offset<0){
                 isEnd = true;
@@ -54,12 +65,15 @@ public class FileService {
             }
             String nextIP = bfService.extractIP(nextAddr);
             int nextPort = bfService.extractPort(nextAddr);
-            System.out.println("Destination = " + desIP + ":" + desPort);
+            if(!isAck)  System.out.println("Destination = " + desIP + ":" + desPort);
             sendService.forwardBin(srcIP, srcPort, desIP, desPort, nextIP, nextPort, bin, offset, filename);
-            System.out.println("Next hop = "+nextAddr);
+            if(!isAck)  System.out.println("Next hop = "+nextAddr);
         }
     }
 
+    public void receiveAck(int offset) throws IOException, InterruptedException {
+        sendService.ackReceived(offset);
+    }
     public void sendFile(String desIP, int desPort, String filename) throws IOException, InterruptedException {
         String addr = bfService.nextHop(desIP,desPort);
         if(addr==null){

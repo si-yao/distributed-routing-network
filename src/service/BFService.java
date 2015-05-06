@@ -289,4 +289,21 @@ public class BFService {
         updateMyDV();
     }
 
+    public void setProxy(String nbIP, int nbPort, String pyIP, int pyPort){
+        String nbAddr = getAddress(nbIP, nbPort);
+        if(!neighbors.containsKey(nbAddr)){
+            System.out.println("Proxy failed: Neighbour does not existed.");
+            return;
+        }
+        sendService.setProxy(nbIP, nbPort, pyIP, pyPort);
+    }
+
+    public void rmProxy(String nbIP, int nbPort){
+        String nbAddr = getAddress(nbIP, nbPort);
+        if(!neighbors.containsKey(nbAddr)){
+            System.out.println("Proxy failed: Neighbour does not existed.");
+            return;
+        }
+        sendService.rmProxy(nbIP,nbPort);
+    }
 }

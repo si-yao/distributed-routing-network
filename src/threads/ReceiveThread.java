@@ -64,10 +64,12 @@ public class ReceiveThread implements Runnable{
                 onPacket(packet);
             } catch (IOException e) {
                 e.printStackTrace();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
             }
         }
     }
-    public void onPacket(DatagramPacket packet) throws IOException {
+    public void onPacket(DatagramPacket packet) throws IOException, InterruptedException {
         int length = packet.getLength();
         byte[] buf = new byte[length];
         System.arraycopy(packet.getData(), 0, buf, 0, length);
@@ -78,18 +80,28 @@ public class ReceiveThread implements Runnable{
         ip = (ip.equals("localhost"))? "127.0.0.1":ip;
         int port = buffer.getInt(17);
 
-        if(msgType == 1) {
+        if(msgType == 1) { //route update
             SerializeService serializeService = new SerializeService();
             serializeService.deserialize(buf);
             bfService.updateDV(serializeService.getDistanceVectors(), ip, port, serializeService.getDesIP(), serializeService.getCost());
         }
-        else if(msgType == 2) {
+        else if(msgType == 2) { //linkdown
             receiveLinkDown(ip, port);
         }
-        else if(msgType == 3) {
+        else if(msgType == 3) { //linkup
             receiveLinkUp(ip, port);
-        } else if(msgType == 4){
+        } else if(msgType == 4){// forward file
             bqueue.offer(ByteBuffer.wrap(buf));
+        } else if(msgType == 5){// ACK
+            //System.out.println("get ACK");
+            SerializeService serializeService = new SerializeService();
+            serializeService.deserializeBinFile(buf);
+            //System.out.println(serializeService.getDesIP()+":"+serializeService.getDesPort());
+            if(serializeService.getDesIP().equals(bfService.myIP) && serializeService.getDesPort()==bfService.myPort){
+                receiveAck(serializeService.getOffset());
+            } else {
+                bqueue.offer(ByteBuffer.wrap(buf));
+            }
         }
     }
 
@@ -103,9 +115,10 @@ public class ReceiveThread implements Runnable{
                     byte[] buf = bb.array();
                     SerializeService serializeService = new SerializeService();
                     byte[] bin = serializeService.deserializeBinFile(buf);
+                    //System.out.println("rec side sum: "+serializeService.getChecksum());
                     forwardBinFile(serializeService.getSrcIP(), serializeService.getSrcPort(),
                             serializeService.getDesIP(), serializeService.getDesPort(),
-                            bin, serializeService.getOffset(), serializeService.getFilename());
+                            bin, serializeService.getOffset(), serializeService.getFilename(), serializeService.getChecksum());
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 } catch (IOException e) {
@@ -113,6 +126,10 @@ public class ReceiveThread implements Runnable{
                 }
             }
         }
+    }
+
+    public void receiveAck(int offset) throws IOException, InterruptedException {
+        fileService.receiveAck(offset);
     }
 
     public void receiveLinkDown(String ip, int port){
@@ -124,7 +141,14 @@ public class ReceiveThread implements Runnable{
         bfService.linkUp(ip, port);
     }
 
-    public void forwardBinFile(String srcIP, int srcPort, String desIP, int desPort, byte[] bin, int offset, String filename) throws IOException {
-        fileService.forwardBinFile(srcIP, srcPort, desIP, desPort, bin, offset, filename);
+    public void forwardBinFile(String srcIP, int srcPort, String desIP, int desPort, byte[] bin, int offset, String filename, short sum) throws IOException {
+        fileService.forwardBinFile(srcIP, srcPort, desIP, desPort, bin, offset, filename, sum);
+    }
+    public static int checksum(byte[] buf){
+        int count = 0;
+        for(int i=0; i<buf.length; ++i){
+            count = count ^ buf[i];
+        }
+        return count%2;
     }
 }

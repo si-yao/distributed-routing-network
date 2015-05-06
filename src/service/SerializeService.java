@@ -20,6 +20,7 @@ public class SerializeService {
     private int desPort;
     private int offset;
     private String filename;
+    private short checksum;
     public static int headerSize;
     int filenameSize = 26;
     int offsetSize = 4;
@@ -94,10 +95,11 @@ public class SerializeService {
      */
     public byte[] serializeBinFile(byte[] bin, int offset, String filename){
         int binSize = bin.length;
-        ByteBuffer buffer = ByteBuffer.allocate(filenameSize + offsetSize + binSize + headerSize);
+        ByteBuffer buffer = ByteBuffer.allocate(filenameSize + offsetSize + binSize + headerSize + 2);
         serializeHeader(buffer);
-        buffer.put(formatString(filename,filenameSize).getBytes());
+        buffer.put(formatString(filename, filenameSize).getBytes());
         buffer.putInt(offset);
+        buffer.putShort(checksum);
         buffer.put(bin);
         return buffer.array();
     }
@@ -136,7 +138,7 @@ public class SerializeService {
         desPort = buffer.getInt(40);
         int pos = 44;
 
-        while(pos < size) {
+        while(pos+45 < size) {
             byte[] des = new byte[21];
             byte[] hop = new byte[21];
 
@@ -181,8 +183,9 @@ public class SerializeService {
         System.arraycopy(buf, 44, filenameBuf, 0, filenameSize);
         String filename_str = new String(filenameBuf);
         filename = filename_str.trim();
-        offset = buffer.getInt(44+filenameSize);
-        int pos = 44+filenameSize+offsetSize;
+        offset = buffer.getInt(44 + filenameSize);
+        checksum = buffer.getShort(44+filenameSize+offsetSize);
+        int pos = 44+filenameSize+offsetSize+2;
         if(pos>=size) return null;
         byte[] binBytes = new byte[size-pos];
         System.arraycopy(buf, pos, binBytes, 0, binBytes.length);
@@ -274,5 +277,29 @@ public class SerializeService {
 
     public static void setHeaderSize(int headerSize) {
         SerializeService.headerSize = headerSize;
+    }
+
+    public short getChecksum() {
+        return checksum;
+    }
+
+    public void setChecksum(short checksum) {
+        this.checksum = checksum;
+    }
+
+    public int getFilenameSize() {
+        return filenameSize;
+    }
+
+    public void setFilenameSize(int filenameSize) {
+        this.filenameSize = filenameSize;
+    }
+
+    public int getOffsetSize() {
+        return offsetSize;
+    }
+
+    public void setOffsetSize(int offsetSize) {
+        this.offsetSize = offsetSize;
     }
 }
