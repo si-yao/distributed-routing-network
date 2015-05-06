@@ -46,11 +46,17 @@ public class CmdThread implements Runnable {
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
+            } else if(cmd.toUpperCase().equals("CLOSE")){
+                close();
             }
             else {
                 System.out.println("Unsupported cmd");
             }
         }
+    }
+
+    private void close(){
+        System.exit(0);
     }
 
     private void linkDown(String[] cmds){

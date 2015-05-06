@@ -40,7 +40,7 @@ public class ReceiveThread implements Runnable{
         } catch (SocketException e) {
             e.printStackTrace();
         }
-        byte arr[] = new byte[4096];
+        byte arr[] = new byte[40960];
         DatagramPacket packet = new DatagramPacket(arr, arr.length);
         while(true){
             try {
@@ -96,6 +96,7 @@ public class ReceiveThread implements Runnable{
     class FileConsumer implements Runnable{
         @Override
         public void run(){
+            //System.out.println("Start the file consumer!");
             while(true){
                 try {
                     ByteBuffer bb = bqueue.take();
@@ -103,7 +104,8 @@ public class ReceiveThread implements Runnable{
                     SerializeService serializeService = new SerializeService();
                     byte[] bin = serializeService.deserializeBinFile(buf);
                     forwardBinFile(serializeService.getSrcIP(), serializeService.getSrcPort(),
-                            serializeService.getDesIP(), serializeService.getDesPort(), bin, serializeService.getOffset());
+                            serializeService.getDesIP(), serializeService.getDesPort(),
+                            bin, serializeService.getOffset(), serializeService.getFilename());
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 } catch (IOException e) {
@@ -122,7 +124,7 @@ public class ReceiveThread implements Runnable{
         bfService.linkUp(ip, port);
     }
 
-    public void forwardBinFile(String srcIP, int srcPort, String desIP, int desPort, byte[] bin, int offset) throws IOException {
-        fileService.forwardBinFile(srcIP, srcPort, desIP, desPort, bin, offset);
+    public void forwardBinFile(String srcIP, int srcPort, String desIP, int desPort, byte[] bin, int offset, String filename) throws IOException {
+        fileService.forwardBinFile(srcIP, srcPort, desIP, desPort, bin, offset, filename);
     }
 }

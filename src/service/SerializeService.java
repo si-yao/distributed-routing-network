@@ -19,11 +19,20 @@ public class SerializeService {
     private String desIP;
     private int desPort;
     private int offset;
+    private String filename;
     public static int headerSize;
+    int filenameSize = 26;
+    int offsetSize = 4;
+
     public SerializeService(){
         distanceVectors = new ConcurrentHashMap<String, DistanceInfo>();
-        headerSize = 44;
+        headerSize = 44; //general header size
     }
+
+    /**
+     * Serialize the header, which is used for all serializations.s
+     * @param buffer
+     */
     private void serializeHeader(ByteBuffer buffer){
         buffer.putShort(msgType);   //2B
         if(srcIP==null) srcIP="";
@@ -42,6 +51,11 @@ public class SerializeService {
         buffer.put(desIP_temp.getBytes());  //15B
         buffer.putInt(desPort);
     }
+
+    /**
+     * The serialize function for packets updating DV
+     * @return
+     */
     public byte[] serialize() {
         int size = distanceVectors.size();
         ByteBuffer buffer = ByteBuffer.allocate(46 * size + headerSize);
@@ -72,14 +86,37 @@ public class SerializeService {
         return buffer.array();
     }
 
-    public byte[] serializeBinFile(byte[] bin, int offset){
-        int offsetSize = 4;
+    /**
+     * serialize packets transmitting binary files.
+     * @param bin
+     * @param offset
+     * @return
+     */
+    public byte[] serializeBinFile(byte[] bin, int offset, String filename){
         int binSize = bin.length;
-        ByteBuffer buffer = ByteBuffer.allocate(offsetSize + binSize + headerSize);
+        ByteBuffer buffer = ByteBuffer.allocate(filenameSize + offsetSize + binSize + headerSize);
         serializeHeader(buffer);
+        buffer.put(formatString(filename,filenameSize).getBytes());
         buffer.putInt(offset);
         buffer.put(bin);
         return buffer.array();
+    }
+
+    /**
+     * Format the string to the certain length.
+     * @param s
+     * @param len
+     * @return
+     */
+    private String formatString(String s, int len){
+        if(len<=s.length()){
+            return s.substring(0,len);
+        }
+        StringBuilder sb = new StringBuilder(s);
+        for(int i=s.length(); i<len; ++i){
+            sb.append(" ");
+        }
+        return sb.toString();
     }
 
     public void deserialize(byte[] buf){
@@ -140,12 +177,16 @@ public class SerializeService {
         String desIP_str = new String(desIP_temp);
         desIP = desIP_str.trim();
         desPort = buffer.getInt(40);
-        offset = buffer.getInt(44);
-        int pos = 48;
+        byte[] filenameBuf = new byte[filenameSize];
+        System.arraycopy(buf, 44, filenameBuf, 0, filenameSize);
+        String filename_str = new String(filenameBuf);
+        filename = filename_str.trim();
+        offset = buffer.getInt(44+filenameSize);
+        int pos = 44+filenameSize+offsetSize;
         if(pos>=size) return null;
         byte[] binBytes = new byte[size-pos];
         System.arraycopy(buf, pos, binBytes, 0, binBytes.length);
-        return binBytes;
+        return binBytes;//the returned bin array which does not include the offset.
     }
 
     public ConcurrentHashMap<String, DistanceInfo> getDistanceVectors() {
@@ -219,4 +260,19 @@ public class SerializeService {
         this.offset = offset;
     }
 
+    public String getFilename() {
+        return filename;
+    }
+
+    public void setFilename(String filename) {
+        this.filename = filename;
+    }
+
+    public static int getHeaderSize() {
+        return headerSize;
+    }
+
+    public static void setHeaderSize(int headerSize) {
+        SerializeService.headerSize = headerSize;
+    }
 }

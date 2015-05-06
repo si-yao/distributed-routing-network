@@ -18,11 +18,10 @@ public class FileService {
         this.sendService = new SendService(bfService);
         curBuffer = null;
     }
-    public void forwardBinFile(String srcIP, int srcPort, String desIP, int desPort, byte[] bin, int offset) throws IOException {
+    public void forwardBinFile(String srcIP, int srcPort, String desIP, int desPort, byte[] bin, int offset, String filename) throws IOException {
         System.out.println("packet received (offset: " + offset + ")");
         System.out.println("Source = " + srcIP + ":" + srcPort);
         if(bfService.myIP.equals(desIP) && bfService.myPort==desPort){
-            System.out.println("File received successfully");
             boolean isEnd = false;
             if(offset<0){
                 isEnd = true;
@@ -40,11 +39,12 @@ public class FileService {
             }
             System.arraycopy(bin, 0, curBuffer, offset, bin.length);
             if(isEnd){
-                File file = new File("file");
+                File file = new File(filename);
                 FileOutputStream os = new FileOutputStream(file);
                 os.write(curBuffer);
                 os.close();
                 curBuffer = null;
+                System.out.println("File received successfully");
             }
         } else {
             String nextAddr = bfService.nextHop(desIP, desPort);
@@ -55,7 +55,7 @@ public class FileService {
             String nextIP = bfService.extractIP(nextAddr);
             int nextPort = bfService.extractPort(nextAddr);
             System.out.println("Destination = " + desIP + ":" + desPort);
-            sendService.forwardBin(srcIP, srcPort, desIP, desPort, nextIP, nextPort, bin, offset);
+            sendService.forwardBin(srcIP, srcPort, desIP, desPort, nextIP, nextPort, bin, offset, filename);
             System.out.println("Next hop = "+nextAddr);
         }
     }

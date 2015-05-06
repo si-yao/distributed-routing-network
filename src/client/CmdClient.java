@@ -51,6 +51,12 @@ public class CmdClient{
             line = bufferedReader.readLine();
         }
         bufferedReader.close();
+        Runtime.getRuntime().addShutdownHook(new Thread(){
+           @Override
+        public void run(){
+               System.out.println("Closed!");
+           }
+        });
     }
 
 }
