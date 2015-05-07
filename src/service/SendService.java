@@ -1,6 +1,5 @@
 package service;
 
-import com.sun.xml.internal.bind.v2.runtime.reflect.Lister;
 import model.DistanceInfo;
 import model.NeighborInfo;
 import threads.ReceiveThread;
@@ -11,7 +10,6 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.*;
 import java.nio.ByteBuffer;
-import java.nio.channels.OverlappingFileLockException;
 import java.util.ArrayDeque;
 import java.util.Map;
 import java.util.Queue;
