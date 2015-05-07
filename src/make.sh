@@ -5,4 +5,4 @@ rm -f ./*/*.class
 echo "compiling source code"
 javac Client.java
 chmod +x ./bfclient
-echo "finish!"
+echo "finish."
