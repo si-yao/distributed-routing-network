@@ -104,7 +104,7 @@ public class ReceiveThread implements Runnable{
         } else if(msgType == 4){// forward file
             bqueue.offer(ByteBuffer.wrap(buf));
         } else if(msgType == 5){// ACK
-            //System.out.println("get ACK");
+            System.out.println("get ACK");
             SerializeService serializeService = new SerializeService();
             serializeService.deserializeBinFile(buf);
             //System.out.println(serializeService.getDesIP()+":"+serializeService.getDesPort());
