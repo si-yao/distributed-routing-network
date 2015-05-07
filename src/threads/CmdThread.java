@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.util.Scanner;
 
 /**
+ * This class listens to the user's input.
  * Created by szeyiu on 4/25/15.
  */
 public class CmdThread implements Runnable {

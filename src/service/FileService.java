@@ -9,6 +9,8 @@ import java.io.IOException;
 import java.net.SocketException;
 
 /**
+ * This class provides services and functions for file transfer.
+ * Functions includes receive and forward binary files, and reply ACK messages.
  * Created by szeyiu on 4/29/15.
  */
 public class FileService {
@@ -20,11 +22,26 @@ public class FileService {
         this.sendService = new SendService(bfService);
         curBuffer = null;
     }
+
+    /**
+     * This function handles received binary file segment, if the current host is not the destination,
+     * then forward the packet to the next hop. If it is the destination, then save the segment and
+     * wait for more coming segments.
+     * @param srcIP
+     * @param srcPort
+     * @param desIP
+     * @param desPort
+     * @param bin
+     * @param offset
+     * @param filename
+     * @param sum
+     * @throws IOException
+     */
     public void forwardBinFile(String srcIP, int srcPort, String desIP, int desPort, byte[] bin, int offset, String filename, short sum) throws IOException {
-        boolean isAck = filename.equals("thisisaack");
+        boolean isAck = filename.equals("thisisaack");//ACK message has a special tag.
         if(!isAck) System.out.println("packet received (offset: " + offset + ")");
         if(!isAck) System.out.println("Source = " + srcIP + ":" + srcPort);
-        if(bfService.myIP.equals(desIP) && bfService.myPort==desPort){
+        if(bfService.myIP.equals(desIP) && bfService.myPort==desPort){//if it is the destination, save the file
             byte[] tmp = new byte[1];
             String nextAddr = bfService.nextHop(srcIP, srcPort);
             //System.out.print("pckt sum: "+ReceiveThread.checksum(bin)+"\nsupposed sum: "+sum+"\n");
@@ -34,7 +51,7 @@ public class FileService {
                 sendService.forwardBin(desIP,desPort,srcIP,srcPort,nextIP,nextPort,tmp,offset,"thisisaack");
             }
             boolean isEnd = false;
-            if(offset<0){
+            if(offset<0){// if offset is negative, it indicates it is the end of the file.
                 isEnd = true;
                 offset = -offset-1;
             }
@@ -57,7 +74,7 @@ public class FileService {
                 curBuffer = null;
                 System.out.println("File received successfully");
             }
-        } else {
+        } else {// if the file is not for the host, then forward the file.
             String nextAddr = bfService.nextHop(desIP, desPort);
             if(nextAddr==null) {
                 System.out.println("Host cannot reach the dest.");
@@ -71,9 +88,24 @@ public class FileService {
         }
     }
 
+    /**
+     * When receive a ACK, then invoke sending level to handle it.
+     * @param offset
+     * @throws IOException
+     * @throws InterruptedException
+     */
     public void receiveAck(int offset) throws IOException, InterruptedException {
         sendService.ackReceived(offset);
     }
+
+    /**
+     * Send a file. It check the routing info and invoke the sending level to actually send the file
+     * @param desIP
+     * @param desPort
+     * @param filename
+     * @throws IOException
+     * @throws InterruptedException
+     */
     public void sendFile(String desIP, int desPort, String filename) throws IOException, InterruptedException {
         String addr = bfService.nextHop(desIP,desPort);
         if(addr==null){

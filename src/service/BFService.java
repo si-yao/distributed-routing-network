@@ -9,6 +9,8 @@ import java.util.*;
 import java.util.concurrent.*;
 import static java.util.concurrent.TimeUnit.*;
 /**
+ * This class provides the main services and functions for
+ * BF routing algorithm and maintaining routing info and neighbour's info.
  * Created by szeyiu on 4/25/15.
  */
 public class BFService {
@@ -46,17 +48,30 @@ public class BFService {
         myDV = new ConcurrentHashMap<String, DistanceInfo>();
         neighborsDV = new ConcurrentHashMap<String, ConcurrentHashMap<String, DistanceInfo>>();
         scheduler = Executors.newScheduledThreadPool(3);
-        scheduler.scheduleAtFixedRate(heartBeats, Math.min(timeout*1000, 1000), Math.min(timeout*1000, 1000), MILLISECONDS);
+        //set timer for heartbeat event. I set the max timer is 2 second, to deal with the situation
+        //if some router has a large timeout value, that will cause timeout on its neighbours.
+        scheduler.scheduleAtFixedRate(heartBeats, Math.min(timeout*1000, 2000), Math.min(timeout*1000, 2000), MILLISECONDS);
+        //check alive
         scheduler.scheduleAtFixedRate(checkAlive, timeout*1000, timeout*1000, MILLISECONDS);
+        //to record which host is known
         knownHost = new HashSet<String>(50);
     }
 
+    /**
+     * To tell which neighbou I should send the packet through.
+     * @param desIP
+     * @param desPort
+     * @return
+     */
     public String nextHop(String desIP, int desPort){
         String addr = getAddress(desIP, desPort);
         if(!myDV.containsKey(addr)) return null;
         return myDV.get(addr).firstHop;
     }
 
+    /**
+     * Kill the user when no response for 3*timeout time.
+     */
     private void checkActive() {
         Date currentTime = Calendar.getInstance().getTime();
         boolean isChanged = false;
@@ -187,7 +202,7 @@ public class BFService {
     }
 
     /**
-     * Update my DV modally, no matter whether neighborDV has been changed or not.
+     * Update my DV forcely, no matter whether neighborDV has been changed or not.
      * @param neighborDV
      * @param fromIP
      * @param fromPort
@@ -201,6 +216,12 @@ public class BFService {
         }
     }
 
+    /**
+     * This function is invoked when a router starts. It tells its neighbours about their mutual links.
+     * @param toIP
+     * @param toPort
+     * @param cost
+     */
     public void addCost(String toIP, int toPort, float cost){
         String addr = getAddress(toIP, toPort);
         neighbors.put(addr, new NeighborInfo(cost));
@@ -210,6 +231,13 @@ public class BFService {
         sendService.sendMyDV();
     }
 
+    /**
+     * Change costs for links between neighbours
+     * @param toIP
+     * @param toPort
+     * @param cost
+     * @return
+     */
     public boolean changeCost(String toIP, int toPort, float cost){
         String addr = getAddress(toIP, toPort);
         if(neighbors.containsKey(addr) && neighbors.get(addr).isConnected){
@@ -219,6 +247,14 @@ public class BFService {
         return false;
     }
 
+    /**
+     * Check if the neighbours' DV has been changed. If not, then do not update my DV.
+     * @param neighborDV
+     * @param fromIP
+     * @param fromPort
+     * @param cost
+     * @return
+     */
     private boolean isSameDV(ConcurrentHashMap<String, DistanceInfo> neighborDV, String fromIP, int fromPort, float cost){
         String neiAddr = getAddress(fromIP, fromPort);
         if(!neighbors.containsKey(neiAddr)) return false;
@@ -246,6 +282,9 @@ public class BFService {
     }
 
 
+    /**
+     * Show route table
+     */
     public void showRT() {
         SimpleDateFormat format = new SimpleDateFormat("hh:mm:ss");
         String time = format.format(Calendar.getInstance().getTime());
@@ -259,6 +298,9 @@ public class BFService {
         }
     }
 
+    /**
+     * show neighbours.
+     */
     public synchronized void showNB() {
         SimpleDateFormat format = new SimpleDateFormat("hh:mm:ss");
         String time = format.format(Calendar.getInstance().getTime());
@@ -274,6 +316,11 @@ public class BFService {
         }
     }
 
+    /**
+     * Handle the link up event in BF level
+     * @param ip
+     * @param port
+     */
     public void linkUp(String ip, int port){
         String addr = getAddress(ip, port);
         if(!neighbors.containsKey(addr)) return;
@@ -281,6 +328,11 @@ public class BFService {
         updateMyDV();
     }
 
+    /**
+     * Handle the link down event in BF level
+     * @param ip
+     * @param port
+     */
     public void linkDown(String ip, int port){
         String addr = getAddress(ip, port);
         if(!neighbors.containsKey(addr)) return;
@@ -289,6 +341,14 @@ public class BFService {
         updateMyDV();
     }
 
+    /**
+     * add proxy in BF level: check if the neighbour exists,
+     * then invoke the setProxy function in sending level.
+     * @param nbIP
+     * @param nbPort
+     * @param pyIP
+     * @param pyPort
+     */
     public void setProxy(String nbIP, int nbPort, String pyIP, int pyPort){
         String nbAddr = getAddress(nbIP, nbPort);
         if(!neighbors.containsKey(nbAddr)){
@@ -298,6 +358,12 @@ public class BFService {
         sendService.setProxy(nbIP, nbPort, pyIP, pyPort);
     }
 
+    /**
+     * remove the proxy in BF level: check if the nrighbour exists.
+     * Then invoke the remove process in sending level.
+     * @param nbIP
+     * @param nbPort
+     */
     public void rmProxy(String nbIP, int nbPort){
         String nbAddr = getAddress(nbIP, nbPort);
         if(!neighbors.containsKey(nbAddr)){

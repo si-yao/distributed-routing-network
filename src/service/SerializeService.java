@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.concurrent.*;
 
 /**
+ * This class provides the service for serialization and deserialization.
  * Created by szeyiu on 4/25/15.
  */
 public class SerializeService {
@@ -121,6 +122,10 @@ public class SerializeService {
         return sb.toString();
     }
 
+    /**
+     * deerialize the packet. Save the parameters to this object.
+     * @param buf
+     */
     public void deserialize(byte[] buf){
         int size = buf.length;
         ByteBuffer buffer = ByteBuffer.wrap(buf);
@@ -160,7 +165,7 @@ public class SerializeService {
     }
 
     /**
-     *
+     * deserialized the file pakcet.
      * @param buf
      * @return the bin file
      */

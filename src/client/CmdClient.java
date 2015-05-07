@@ -24,16 +24,21 @@ public class CmdClient{
         this.configFile = configFile;
     }
 
+    /**
+     * This funtion is the entry of client. It first load the config flie and start all services for routers
+     * and transferring files, and dealing with packet loss and corruption.
+     * @throws IOException
+     */
     public void start() throws IOException {
         BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(new FileInputStream(new File(configFile))));
         String line = bufferedReader.readLine();
         String[] splt = line.split(" ");
         port = Integer.valueOf(splt[0]);
         timeout = Integer.valueOf(splt[1]);
-        bfService = new BFService(port, timeout);
-        sendService = new SendService(bfService);
-        fileService = new FileService(bfService);
-        ReceiveThread receiveThread = new ReceiveThread(bfService);
+        bfService = new BFService(port, timeout);//bf service handling route updates
+        sendService = new SendService(bfService);//send service handling sending packets in lower level.
+        fileService = new FileService(bfService);//file service handling receiving and forwarding files.
+        ReceiveThread receiveThread = new ReceiveThread(bfService);//Receive thread listening on port to receive packet.
         Thread t = new Thread(receiveThread);
         t.start();
         CmdThread cmdThread = new CmdThread(bfService, sendService, fileService);
@@ -51,6 +56,7 @@ public class CmdClient{
             line = bufferedReader.readLine();
         }
         bufferedReader.close();
+        //Add a event for shuting down the program.
         Runtime.getRuntime().addShutdownHook(new Thread(){
            @Override
         public void run(){

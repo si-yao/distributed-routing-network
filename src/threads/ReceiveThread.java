@@ -16,13 +16,14 @@ import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.TimeUnit;
 
 /**
+ * This thread listens to the incoming packets.
  * Created by szeyiu on 4/25/15.
  */
 public class ReceiveThread implements Runnable{
     BFService bfService;
     FileService fileService;
     private DatagramSocket listenSocket;
-    BlockingQueue<ByteBuffer> bqueue;
+    BlockingQueue<ByteBuffer> bqueue;//The thread maintains a input queue
 
     public ReceiveThread(BFService bfService) throws SocketException {
         this.bfService = bfService;
@@ -53,6 +54,9 @@ public class ReceiveThread implements Runnable{
         }
     }
 
+    /**
+     * Runnable thread to handle incoming packet.
+     */
     class OnPacketThread implements Runnable{
         DatagramPacket packet;
         public OnPacketThread(DatagramPacket packet){
@@ -69,6 +73,13 @@ public class ReceiveThread implements Runnable{
             }
         }
     }
+
+    /**
+     * Read the packet and delegate it to different services on receiving the packet.
+     * @param packet
+     * @throws IOException
+     * @throws InterruptedException
+     */
     public void onPacket(DatagramPacket packet) throws IOException, InterruptedException {
         int length = packet.getLength();
         byte[] buf = new byte[length];
@@ -105,6 +116,10 @@ public class ReceiveThread implements Runnable{
         }
     }
 
+    /**
+     * The thread maintains a input queue, and this class is the single-threaded consumer to
+     * get the packet from the queue, avoiding congestion and losing packets.
+     */
     class FileConsumer implements Runnable{
         @Override
         public void run(){
@@ -128,22 +143,56 @@ public class ReceiveThread implements Runnable{
         }
     }
 
+    /**
+     * When receive a ACK knowledge, let file service to handle it.
+     * @param offset
+     * @throws IOException
+     * @throws InterruptedException
+     */
     public void receiveAck(int offset) throws IOException, InterruptedException {
         fileService.receiveAck(offset);
     }
 
+    /**
+     * WHen receive a linkdown message, let BF service to handle it.
+     * @param ip
+     * @param port
+     */
     public void receiveLinkDown(String ip, int port){
-        System.out.println("Received link down signal, "+ ip +":"+port);
+        System.out.println("Received link down signal, "+ ip +":" + port);
         bfService.linkDown(ip, port);
     }
 
-    public void receiveLinkUp(String ip, int port){
+    /**
+     * When receive a linkup message, let BF service to handle it.
+     * @param ip
+     * @param port
+     */
+    public void receiveLinkUp(String ip, int port) {
         bfService.linkUp(ip, port);
     }
 
+    /**
+     * When receive a binary file, let file service to handle it.
+     * @param srcIP
+     * @param srcPort
+     * @param desIP
+     * @param desPort
+     * @param bin
+     * @param offset
+     * @param filename
+     * @param sum
+     * @throws IOException
+     */
     public void forwardBinFile(String srcIP, int srcPort, String desIP, int desPort, byte[] bin, int offset, String filename, short sum) throws IOException {
         fileService.forwardBinFile(srcIP, srcPort, desIP, desPort, bin, offset, filename, sum);
     }
+
+    /**
+     * This static function calculates the checksum of the binary file by XOR operation.
+     * @param buf
+     * @return
+     */
     public static int checksum(byte[] buf){
         int count = 0;
         for(int i=0; i<buf.length; ++i){

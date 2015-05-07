@@ -28,7 +28,7 @@ public class SendService {
     private int MSS = 44+4+26+2+40000;
     private static Map<String, String> nb2proxy = new ConcurrentHashMap<String, String>();
     private static BlockingDeque<PacketOffset> sendingQueue;
-    static Thread sendTh;
+    static Thread sendTh;//thread for sending packets to the lossy proxy
     public SendService(BFService bfService) throws SocketException {
         if(nb2proxy==null){
             nb2proxy = new ConcurrentHashMap<String, String>();
@@ -43,6 +43,11 @@ public class SendService {
             sendTh.start();
         }
     }
+
+    /**
+     * thread for sending packets to lossy proxy.
+     * It sends next packet only after received the last packet's ACK.
+     */
     private Runnable sendWorker = new Runnable() {
         @Override
         public void run() {
@@ -61,6 +66,10 @@ public class SendService {
             }
         }
     };
+
+    /**
+     * A wrapped class for packet and offset info.
+     */
     class PacketOffset{
         DatagramPacket packet;
         int offset;
@@ -69,6 +78,13 @@ public class SendService {
             this.offset = o;
         }
     }
+
+    /**
+     * Check if the ACK is for the last sending, if so, then prepare to send next packet.
+     * @param offset
+     * @throws InterruptedException
+     * @throws IOException
+     */
     public void ackReceived(int offset) throws InterruptedException, IOException {
         PacketOffset top = sendingQueue.peek();
         //System.out.println("ackrec: size: "+sendingQueue.size());
@@ -82,18 +98,31 @@ public class SendService {
         }
     }
 
+    /**
+     * Add the proxy info.
+     * @param nbIP
+     * @param nbPort
+     * @param pyIP
+     * @param pyPort
+     */
     public void setProxy(String nbIP, int nbPort, String pyIP, int pyPort){
         String pyAddr = pyIP+":"+pyPort;
         String nbAddr = nbIP+":"+nbPort;
         nb2proxy.put(nbAddr, pyAddr);
     }
 
+    /**
+     * Remove the proxy info.
+     * @param nbIP
+     * @param nbPort
+     */
     public void rmProxy(String nbIP, int nbPort){
         String nbAddr = nbIP+":"+nbPort;
         nb2proxy.remove(nbAddr);
     }
+
     /**
-     * For heartbeats, just send something, 2 bytes long.
+     * This method is deprecated.
      * @throws IOException
      */
     public void sendHeartBeats() throws IOException {
@@ -126,6 +155,9 @@ public class SendService {
         }
     }
 
+    /**
+     * Send my DV to neighbours.
+     */
     public synchronized void sendMyDV() {
         try {
             //System.out.println("sending update");
@@ -158,6 +190,11 @@ public class SendService {
     }
 
 
+    /**
+     * Send link down message to neighbours.
+     * @param ip
+     * @param port
+     */
     public void sendLinkDown(String ip, int port) {
         try {
             //System.out.println("sending link down");
@@ -175,6 +212,11 @@ public class SendService {
     }
 
 
+    /**
+     * Send link up message to neighbours.
+     * @param ip
+     * @param port
+     */
     public void sendLinkUp(String ip, int port) {
         try {
             //System.out.println("sending link up");
@@ -192,11 +234,23 @@ public class SendService {
         }
     }
 
+    /**
+     * Send the file from the local host. It segment the file according to MSS.
+     * If the proxy is set, then enqueue the packet into the sending queue.
+     * If not, then jsut send the packet to the next hop.
+     * @param desIP
+     * @param desPort
+     * @param nextHopIP
+     * @param nextHopPort
+     * @param file
+     * @throws IOException
+     * @throws InterruptedException
+     */
     public void sendFile(String desIP, int desPort, String nextHopIP, int nextHopPort, String file) throws IOException, InterruptedException {
         String nextAddr = nextHopIP+":"+nextHopPort;
         int fileSegSize = MSS - SerializeService.headerSize - 30 -2;
         boolean isProxy = false;
-        if(nb2proxy.containsKey(nextAddr)){
+        if(nb2proxy.containsKey(nextAddr)){//if proxy is set
             System.out.println("forward through proxy");
             String pyAddr = nb2proxy.get(nextAddr);
             nextHopIP = extractIP(pyAddr);
@@ -249,6 +303,19 @@ public class SendService {
         is.close();
     }
 
+    /**
+     * Forward the received binary file packet to next hop.
+     * @param srcIP
+     * @param srcPort
+     * @param desIP
+     * @param desPort
+     * @param nextHopIP
+     * @param nextHopPort
+     * @param bin
+     * @param offset
+     * @param filename
+     * @throws IOException
+     */
     public void forwardBin(String srcIP, int srcPort, String desIP, int desPort, String nextHopIP, int nextHopPort, byte[] bin, int offset, String filename) throws IOException {
         String nextAddr = nextHopIP+":"+nextHopPort;
         if(nb2proxy.containsKey(nextAddr)){
