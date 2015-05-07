@@ -325,6 +325,7 @@ public class BFService {
         String addr = getAddress(ip, port);
         if(!neighbors.containsKey(addr)) return;
         neighbors.get(addr).isConnected = true;
+        neighbors.get(addr).updateTime();
         updateMyDV();
     }
 
