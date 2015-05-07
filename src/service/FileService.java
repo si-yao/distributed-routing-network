@@ -44,7 +44,7 @@ public class FileService {
         if(bfService.myIP.equals(desIP) && bfService.myPort==desPort){//if it is the destination, save the file
             byte[] tmp = new byte[1];
             String nextAddr = bfService.nextHop(srcIP, srcPort);
-            //System.out.print("pckt sum: "+ReceiveThread.checksum(bin)+"\nsupposed sum: "+sum+"\n");
+            System.out.print("pckt sum: "+ReceiveThread.checksum(bin)+"\nsupposed sum: "+sum+"\n");
             if(nextAddr!=null && ReceiveThread.checksum(bin)==sum){
                 String nextIP = bfService.extractIP(nextAddr);
                 int nextPort = bfService.extractPort(nextAddr);
