@@ -253,7 +253,7 @@ public class SendService {
             String pyAddr = nb2proxy.get(nextAddr);
             nextHopIP = extractIP(pyAddr);
             nextHopPort = extractPort(pyAddr);
-            fileSegSize -= 39600;
+            //fileSegSize -= 39600;
             isProxy = true;
         }
         SerializeService serializeService = new SerializeService();
