@@ -54,7 +54,7 @@ public class SendService {
                     PacketOffset packet = sendingQueue.peek();
                     //System.out.println("sendworker: size: "+sendingQueue.size());
                     if(packet!=null) socket.send(packet.packet);
-                    Thread.sleep(500);
+                    Thread.sleep(1000);
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 } catch (IOException e) {
