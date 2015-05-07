@@ -48,7 +48,7 @@ public class FileService {
             if(nextAddr!=null && ReceiveThread.checksum(bin)==sum){
                 String nextIP = bfService.extractIP(nextAddr);
                 int nextPort = bfService.extractPort(nextAddr);
-                sendService.forwardBin(desIP,desPort,srcIP,srcPort,nextIP,nextPort,tmp,offset,"thisisaack");
+                sendService.forwardBin(desIP,desPort,srcIP,srcPort,srcIP,srcPort,tmp,offset,"thisisaack");
             }
             boolean isEnd = false;
             if(offset<0){// if offset is negative, it indicates it is the end of the file.
