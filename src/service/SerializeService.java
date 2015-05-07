@@ -150,13 +150,18 @@ public class SerializeService {
             System.arraycopy(buf, pos, des, 0, 21);
             String nei = new String(des);
             nei = nei.trim();
+            if(!nei.matches("[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+:[0-9]+")){
+                return;
+            }
 
             float cost = buffer.getFloat(pos+21);
 
             System.arraycopy(buf, pos+25, hop, 0, 21);
             String firstHop = new String(hop);
             firstHop = firstHop.trim();
-
+            if(!firstHop.matches("[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+:[0-9]+")){
+                return;
+            }
             pos += 46;
 
             DistanceInfo item = new DistanceInfo(cost, firstHop);
