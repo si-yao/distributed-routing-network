@@ -314,7 +314,7 @@ public class SendService {
      * @param filename
      * @throws IOException
      */
-    public void forwardBin(String srcIP, int srcPort, String desIP, int desPort, String nextHopIP, int nextHopPort, byte[] bin, int offset, String filename) throws IOException {
+    public void forwardBin(String srcIP, int srcPort, String desIP, int desPort, String nextHopIP, int nextHopPort, byte[] bin, int offset, String filename, short sum) throws IOException {
         String nextAddr = nextHopIP+":"+nextHopPort;
         if(nb2proxy.containsKey(nextAddr)){
             System.out.println("forward through proxy");
@@ -332,6 +332,7 @@ public class SendService {
         serializeService.setCost(0);
         serializeService.setDesIP(desIP);
         serializeService.setDesPort(desPort);
+        serializeService.setChecksum(sum);
         byte[] sendBytes = serializeService.serializeBinFile(bin, offset, filename);
         DatagramPacket packet = new DatagramPacket(sendBytes, sendBytes.length);
         packet.setAddress(InetAddress.getByName(nextHopIP));
