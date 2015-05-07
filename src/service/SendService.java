@@ -23,7 +23,7 @@ import java.util.concurrent.LinkedBlockingDeque;
 public class SendService {
     private BFService bfService;
     private DatagramSocket socket;
-    private int MSS = 44+4+26+2+40000;
+    private int MSS = 44+4+26+2+500;
     private static Map<String, String> nb2proxy = new ConcurrentHashMap<String, String>();
     private static BlockingDeque<PacketOffset> sendingQueue;
     static Thread sendTh;//thread for sending packets to the lossy proxy
@@ -54,7 +54,7 @@ public class SendService {
                     PacketOffset packet = sendingQueue.peek();
                     //System.out.println("sendworker: size: "+sendingQueue.size());
                     if(packet!=null) socket.send(packet.packet);
-                    Thread.sleep(1000);
+                    Thread.sleep(500);
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 } catch (IOException e) {
@@ -285,18 +285,19 @@ public class SendService {
             DatagramPacket packet = new DatagramPacket(sendBytes, sendBytes.length);
             packet.setAddress(InetAddress.getByName(nextHopIP));
             packet.setPort(nextHopPort);
-            if(!isProxy) {
+            sendingQueue.offer(new PacketOffset(packet, offset));
+            /*if(!isProxy) {
                 //System.out.println("send the packet");
                 socket.send(packet);
             }
             else {
                 //System.out.println("packet enqueue!");
                 sendingQueue.offer(new PacketOffset(packet, offset));
-            }
+            }*/
             if(offset<0) break;
             offset += curBinLen;
             curBinLen = is.read(binArr, 0, fileSegSize);
-            Thread.sleep(500);
+            //Thread.sleep(500);
         }
         is.close();
     }
